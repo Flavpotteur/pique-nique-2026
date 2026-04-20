@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Le pique-nique du siècle 🔥</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #eef2f7; padding: 10px; }
+        .container { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 1250px; margin: auto; }
+        h1 { color: #2c3e50; text-align: center; font-size: 1.8rem; }
+        .explication { background: #d1ecf1; color: #0c5460; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14.5px; border-left: 5px solid #17a2b8; line-height: 1.5; }
+        form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px; border: 1px solid #dee2e6; }
+        input, select { padding: 10px; border: 1px solid #ced4da; border-radius: 5px; font-size: 14px; }
+        button { background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #219150; }
+        .table-wrapper { overflow-x: auto; margin-top: 20px; }
+        table { width: 100%; border-collapse: collapse; min-width: 1100px; }
+        th { background: #34495e; color: white; padding: 12px; font-size: 12px; text-transform: uppercase; border: 1px solid #2c3e50; }
+        td { padding: 10px; border: 1px solid #dee2e6; font-size: 14px; text-align: center; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+        .col-allergie { color: #c0392b !important; font-weight: bold; background: #fdf2f2 !important; }
+        .warning-orange { background-color: #ff9800 !important; color: white !important; font-weight: bold; }
+        .delete-btn { color: #bdc3c7; cursor: pointer; font-weight: bold; font-size: 18px; }
+        .delete-btn:hover { color: #e74c3c; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎂 Organisation Pique-Nique (LIVE 🚀)</h1>
+
+    <div class="explication">
+        <strong>Mode d'emploi Collaboratif 🛠️</strong><br>
+        - Tout le monde voit les modifs en temps réel !<br>
+        - Pour effacer un truc, retape-le exactement pareil.<br>
+        - ⚠️ Les cases <strong>ORANGE</strong> indiquent un danger d'allergie !
+    </div>
+
+    <form onsubmit="ajouterDonnee(event)">
+        <input type="text" id="nom" placeholder="Ton nom (ex: Cass)" required>
+        <select id="categorie">
+            <option value="apero">Apero 🍸</option>
+            <option value="entree">Entrée 🥗</option>
+            <option value="plat">Plat 🥘</option>
+            <option value="fromage">Fromage 🧀</option>
+            <option value="dessert">Dessert 🍰</option>
+            <option value="boisson">Boisson 🥤</option>
+            <option value="jeux">Jeux 🎲</option>
+            <option value="autre">Autre 🛠️</option>
+            <option value="alergie">Allergie / Dégoût 🤢</option>
+        </select>
+        <input type="text" id="details" placeholder="Ce que tu ramènes..." required>
+        <button type="submit">Valider</button>
+    </form>
+
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Prénom</th><th>Apero</th><th>Entrée</th><th>Plat</th><th>Fromage</th><th>Dessert</th><th>Boisson</th><th>Jeux</th><th>Autre</th><th style="background:#c0392b">Allergies 🤢</th><th>Virer</th>
+                </tr>
+            </thead>
+            <tbody id="tableauBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+    // 1. Config Firebase
+    const firebaseConfig = {
+        apiKey: "AIzaSyBO0mqgUZyXFI3OfeTx5m27mRkx2BLYsjI",
+        authDomain: "pic-nic-b33b6.firebaseapp.com",
+        databaseURL: "https://pic-nic-b33b6-default-rtdb.europe-west1.firebasedatabase.app/", 
+        projectId: "pic-nic-b33b6",
+        storageBucket: "pic-nic-b33b6.firebasestorage.app",
+        messagingSenderId: "585276877110",
+        appId: "1:585276877110:web:40199badc04094a9a0ab97",
+        measurementId: "G-SDYC2C4ZR9"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const categories = ['apero', 'entree', 'plat', 'fromage', 'dessert', 'boisson', 'jeux', 'autre', 'alergie'];
+    let annivData = {}; // On stocke les données du serveur ici
+
+    // 2. Écouteur en temps réel (La magie Firebase)
+    db.ref('pique-nique').on('value', (snapshot) => {
+        annivData = snapshot.val() || {};
+        refreshTable();
+    });
+
+    function baseMot(mot) {
+        if(!mot) return "";
+        let m = mot.toLowerCase().trim();
+        return m.endsWith('s') ? m.slice(0, -1) : m;
+    }
+
+    function trouverNomExistant(nouveauNom) {
+        let n = nouveauNom.toLowerCase().trim();
+        for (let nomExistant in annivData) {
+            let ex = nomExistant.toLowerCase().trim();
+            if (ex === n || ex.startsWith(n) || n.startsWith(ex)) return nomExistant;
+        }
+        return nouveauNom.trim(); 
+    }
+
+    function ajouterDonnee(event) {
+        event.preventDefault(); 
+        let nomSaisi = document.getElementById('nom').value.trim();
+        const cat = document.getElementById('categorie').value;
+        const details = document.getElementById('details').value.trim();
+        if (!nomSaisi || !details) return;
+
+        const nomFinal = trouverNomExistant(nomSaisi);
+        if (!annivData[nomFinal]) annivData[nomFinal] = {};
+        
+        let items = annivData[nomFinal][cat] ? annivData[nomFinal][cat].split(',').map(s => s.trim()) : [];
+        let detailBase = baseMot(details);
+        let index = items.findIndex(i => baseMot(i) === detailBase);
+        
+        if (index !== -1) {
+            items.splice(index, 1); 
+            annivData[nomFinal][cat] = items.join(', ');
+            if (annivData[nomFinal][cat] === '') delete annivData[nomFinal][cat]; 
+        } else {
+            items.push(details);
+            annivData[nomFinal][cat] = items.join(', ');
+        }
+
+        // On envoie à Firebase (c'est ça qui synchronise tout le monde)
+        db.ref('pique-nique/' + nomFinal).set(annivData[nomFinal]);
+
+        document.getElementById('details').value = '';
+        document.getElementById('details').focus();
+    }
+
+    function refreshTable() {
+        const body = document.getElementById('tableauBody');
+        body.innerHTML = '';
+
+        let motsBasesAllergies = [];
+        Object.values(annivData).forEach(p => {
+            if (p.alergie) {
+                p.alergie.split(',').forEach(m => { 
+                    if(m.trim().length > 2) motsBasesAllergies.push(baseMot(m)); 
+                });
+            }
+        });
+
+        for (const personne in annivData) {
+            let row = document.createElement('tr');
+            row.innerHTML = `<td style="font-weight:bold; background:#f8f9fa;">${personne}</td>`;
+            
+            categories.forEach(c => {
+                let cell = document.createElement('td');
+                let contenu = annivData[personne][c] || '';
+                cell.innerText = contenu;
+                
+                if (c === 'alergie' && contenu !== '') {
+                    cell.className = 'col-allergie';
+                } else if (contenu !== '' && c !== 'alergie') {
+                    let danger = contenu.split(',').some(m => {
+                        let b = baseMot(m);
+                        return b.length > 2 && motsBasesAllergies.includes(b);
+                    });
+                    if (danger) cell.className = 'warning-orange';
+                }
+                row.appendChild(cell);
+            });
+
+            let cellAction = document.createElement('td');
+            cellAction.innerHTML = '<span class="delete-btn">❌</span>';
+            cellAction.onclick = () => {
+                if(confirm("Dégager " + personne + " ?")) db.ref('pique-nique/' + personne).remove();
+            };
+            row.appendChild(cellAction);
+            body.appendChild(row);
+        }
+    }
+</script>
+</body>
+</html>
